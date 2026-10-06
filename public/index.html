@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ask Suzzie</title>
+<style>
+  :root{
+    --ground:#F3F6F5; --surface:#fff; --sunk:#E8EEEC; --ink:#17262A; --muted:#566A6D; --line:#C9D5D3;
+    --accent:#0C6B66; --accent-soft:#D6ECE9; --crisis:#B42318; --crisis-soft:#FBE4E1; --warn:#8A5A00; --warn-soft:#FBEFD5;
+    --font:"Segoe UI",system-ui,-apple-system,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --ground:#0E1517; --surface:#152023; --sunk:#1B282B; --ink:#E3ECEB; --muted:#9AB0B1; --line:#2C3D40;
+    --accent:#4FC2B6; --accent-soft:#16373A; --crisis:#FF8A7A; --crisis-soft:#3A1D1A; --warn:#F2C161; --warn-soft:#342A14;}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ground);color:var(--ink);font:16px/1.55 var(--font);
+       display:flex;justify-content:center;padding:0 16px env(safe-area-inset-bottom,0px)}
+  .app{width:100%;max-width:560px;min-height:100vh;display:flex;flex-direction:column}
+  header{padding:20px 4px 12px;display:flex;align-items:baseline;gap:10px}
+  header h1{margin:0;font-size:20px}
+  header span{font-size:12px;color:var(--muted)}
+  #log{flex:1;display:flex;flex-direction:column;gap:14px;padding:8px 0 16px}
+  .bubble{padding:12px 14px;border-radius:14px;max-width:88%;white-space:pre-wrap}
+  .me{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:4px}
+  .sq{align-self:flex-start;background:var(--surface);border:1px solid var(--line);border-bottom-left-radius:4px}
+  .sq.crisis{background:var(--crisis-soft);border-color:var(--crisis)}
+  .sq.urgent{background:var(--warn-soft);border-color:var(--warn)}
+  .mode{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+  .mode.crisis{color:var(--crisis)} .mode.urgent{color:var(--warn)}
+  .cards{align-self:flex-start;width:100%;display:flex;flex-direction:column;gap:8px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  .card h3{margin:0 0 2px;font-size:15px}
+  .card h3 a{color:var(--accent);text-decoration:none}
+  .card h3 a:hover,.card h3 a:focus-visible{text-decoration:underline}
+  .card .why{font-size:13px;color:var(--muted)}
+  .card .meta{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;font-size:12px}
+  .tag{background:var(--sunk);border-radius:999px;padding:3px 8px;color:var(--muted)}
+  .tag.ok{background:var(--accent-soft);color:var(--accent)}
+  .res{background:var(--surface);border:1px solid var(--crisis);border-radius:12px;padding:12px 14px}
+  .res b{display:block}
+  .res span{font-size:14px;color:var(--muted)}
+  .actions{display:flex;gap:8px;flex-wrap:wrap}
+  .actions button{background:var(--surface);color:var(--ink);border:1px solid var(--line);
+                  border-radius:999px;padding:7px 13px;font-size:14px;cursor:pointer}
+  .actions button:hover{border-color:var(--accent)}
+  form{position:sticky;bottom:0;background:var(--ground);padding:10px 0 16px;display:flex;gap:8px}
+  input{flex:1;background:var(--surface);color:var(--ink);border:1px solid var(--line);
+        border-radius:999px;padding:12px 16px;font:inherit}
+  input:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .send,.mic{border:0;border-radius:50%;width:46px;height:46px;font-size:18px;cursor:pointer;background:var(--accent);color:#fff}
+  .mic{background:var(--sunk);color:var(--ink)}
+  .mic[aria-pressed="true"]{background:var(--crisis);color:#fff}
+  .hint{font-size:13px;color:var(--muted);padding:4px 4px 10px}
+  .hint b{color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="app">
+  <header><h1>Ask Suzzie</h1><span>demo · US · sample listings</span></header>
+
+  <p class="hint">Try: <b>find yoga in Jersey City</b> · <b>i feel isolated</b> · <b>i have a severe headache</b> · <b>just go with this</b></p>
+
+  <div id="log" aria-live="polite"></div>
+
+  <form id="f">
+    <input id="t" autocomplete="off" placeholder="What's on your mind?" aria-label="Message">
+    <button class="mic" id="mic" type="button" aria-pressed="false" title="Speak" aria-label="Speak">🎙</button>
+    <button class="send" type="submit" aria-label="Send">↑</button>
+  </form>
+</div>
+
+<script>
+const log = document.getElementById('log');
+const sessionId = 'demo-' + Math.random().toString(36).slice(2, 8);
+
+const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text) n.textContent = text; return n; };
+
+function addMe(text){ log.append(Object.assign(el('div','bubble me',text))); scroll(); }
+
+function addSuzzie(r){
+  const crisis = r.mode === 'CRISIS_SUPPORT', urgent = r.mode === 'URGENT_MEDICAL';
+  if (r.message || r.clarifyingQuestion) {
+    const b = el('div', 'bubble sq' + (crisis ? ' crisis' : urgent ? ' urgent' : ''));
+    b.append(el('div', 'mode' + (crisis ? ' crisis' : urgent ? ' urgent' : ''), r.mode.replace(/_/g,' ').toLowerCase()));
+    b.append(document.createTextNode(r.clarifyingQuestion || r.message));
+    log.append(b);
+  }
+
+  if (r.resources?.length) {
+    const wrap = el('div','cards');
+    for (const res of r.resources) {
+      const c = el('div','res');
+      c.append(el('b', null, res.label), el('span', null, res.detail));
+      wrap.append(c);
+    }
+    log.append(wrap);
+  }
+
+  if (r.recommendations?.length) {
+    const wrap = el('div','cards');
+    for (const rec of r.recommendations) {
+      const c = el('div','card');
+      const title = el('h3');
+      if (rec.bookingUrl) {
+        const a = el('a', null, rec.name);
+        a.href = rec.bookingUrl;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        title.append(a);
+      } else title.textContent = rec.name;
+      c.append(title, el('div','why', rec.displayReason));
+      const meta = el('div','meta');
+      meta.append(el('span','tag', rec.entityType));
+      meta.append(el('span','tag', rec.format.replace('_',' ')));
+      meta.append(el('span','tag', rec.priceUsd === 0 ? 'free' : rec.priceUsd ? '$' + rec.priceUsd : 'price on request'));
+      if (rec.verified) meta.append(el('span','tag ok','verified by MSN'));
+      else if (rec.source === 'public_open_data') meta.append(el('span','tag','public listing · not verified'));
+      c.append(meta);
+      wrap.append(c);
+    }
+    log.append(wrap);
+  }
+
+  if (r.quickActions?.length) {
+    const row = el('div','actions');
+    for (const a of r.quickActions) {
+      const btn = el('button', null, a.label);
+      btn.type = 'button';
+      btn.onclick = () => {
+        if (a.kind === 'dismiss') { log.innerHTML = ''; return; }
+        if (a.kind === 'refine' && a.value) { send(a.value); return; }
+        if (a.kind === 'navigate') { log.append(el('div','hint','→ would open ' + a.value)); }
+      };
+      row.append(btn);
+    }
+    log.append(row);
+  }
+  scroll();
+}
+
+const scroll = () => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+
+async function send(text, inputMode = 'typed'){
+  if (!text.trim()) return;
+  addMe(text);
+  try {
+    const res = await fetch('/api/ask', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ userId: 'demo-user', sessionId, text, inputMode }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    addSuzzie(data);
+  } catch {
+    log.append(el('div','bubble sq','Something went wrong reaching the engine. Is the dev server running?'));
+    scroll();
+  }
+}
+
+document.getElementById('f').addEventListener('submit', e => {
+  e.preventDefault();
+  const input = document.getElementById('t');
+  const text = input.value; input.value = '';
+  send(text);
+});
+
+// Voice input (Step D preview). Browser speech recognition: audio never leaves the device,
+// and only the transcript is sent. Chrome and Edge support this today.
+const mic = document.getElementById('mic');
+const Recog = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (!Recog) { mic.disabled = true; mic.title = 'Voice input needs Chrome or Edge'; }
+else {
+  const recog = new Recog();
+  recog.lang = 'en-US'; recog.interimResults = false;
+  mic.onclick = () => {
+    const on = mic.getAttribute('aria-pressed') === 'true';
+    if (on) { recog.stop(); mic.setAttribute('aria-pressed','false'); }
+    else { recog.start(); mic.setAttribute('aria-pressed','true'); }
+  };
+  recog.onresult = e => { mic.setAttribute('aria-pressed','false'); send(e.results[0][0].transcript, 'voice'); };
+  recog.onerror = () => mic.setAttribute('aria-pressed','false');
+  recog.onend = () => mic.setAttribute('aria-pressed','false');
+}
+</script>
+</body>
+</html>

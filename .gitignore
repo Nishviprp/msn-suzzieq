@@ -1,0 +1,12 @@
+﻿node_modules/
+dist/
+.env
+.env.*
+
+# Generated data — rebuild with: npm run fetch:zips, import:nonprofits, import:samhsa, build:embeddings
+data/*
+!data/listings-template.csv
+
+# Model cache
+.cache/
+*.onnx
